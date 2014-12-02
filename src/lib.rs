@@ -98,6 +98,16 @@ impl<T: Send + Sync> Deref<T> for OnceMutex<T> {
     }
 }
 
+// Safe, because we have &mut self, which means no OnceMutexGuard's exist.
+impl<T: Send + Sync> DerefMut<T> for OnceMutex<T> {
+    fn deref_mut(&mut self) -> &mut T {
+        // Should be impossible.
+        debug_assert!(self.state.load(SeqCst) != LOCKED);
+
+        unsafe { mem::transmute(self.data.get()) }
+    }
+}
+
 /// A guard providing a one-time lock on a OnceMutex.
 pub struct OnceMutexGuard<'a, T: 'a> {
     parent: &'a OnceMutex<T>,
