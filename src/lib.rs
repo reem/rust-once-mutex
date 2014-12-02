@@ -22,6 +22,8 @@
 
 #[cfg(test)] #[phase(plugin)]
 extern crate stainless;
+#[cfg(test)]
+extern crate test;
 
 use std::sync::{Mutex, MutexGuard};
 use std::sync::atomic::AtomicUint;
@@ -132,9 +134,10 @@ impl<'a, T> Drop for OnceMutexGuard<'a, T> {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     pub use super::{OnceMutex, FREE, UNUSED, LOCKED};
     pub use std::sync::atomic::Ordering::{Relaxed, SeqCst};
+    pub use std::sync::Mutex;
 
     describe! oncemutex {
         before_each {
@@ -164,6 +167,26 @@ mod test {
         it "should set the state to FREE when derefed" {
             *mutex;
             assert_eq!(mutex.state.load(Relaxed), FREE);
+        }
+
+        bench "locking" (bencher) {
+            let mutex = OnceMutex::new(5u);
+            bencher.iter(|| {
+                ::test::black_box(mutex.lock());
+                mutex.state.store(UNUSED, Relaxed);
+            });
+        }
+
+        bench "access" (bencher) {
+            let mutex = OnceMutex::new(5u);
+            bencher.iter(|| ::test::black_box(*mutex));
+        }
+    }
+
+    describe! mutex {
+        bench "locking" (bencher) {
+            let mutex = Mutex::new(5u);
+            bencher.iter(|| ::test::black_box(mutex.lock()));
         }
     }
 }
