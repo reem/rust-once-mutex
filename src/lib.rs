@@ -76,6 +76,11 @@ impl<T: Send + Sync> OnceMutex<T> {
     pub fn into_inner(self) -> T {
         self.data.value
     }
+
+    /// Is this OnceMutex currently locked?
+    pub fn locked(&self) -> bool {
+        self.state.load(SeqCst) == LOCKED
+    }
 }
 
 impl<T: Send + Sync> Deref<T> for OnceMutex<T> {
