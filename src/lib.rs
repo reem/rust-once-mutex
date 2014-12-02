@@ -77,7 +77,7 @@ impl<T: Send + Sync> OnceMutex<T> {
     /// Does nothing if there is no lock.
     pub fn wait(&self) {
         // Don't take out a lock if we aren't locked.
-        if self.locked() { self.lock.lock() }
+        if self.locked() { self.lock.lock(); }
     }
 
     /// Extract the data from a OnceMutex.
