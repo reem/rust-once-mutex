@@ -34,7 +34,8 @@ const LOCKED: uint = 1;
 const FREE: uint = 2;
 
 /// A mutex which can only be locked once, but which provides
-/// very fast concurrent reads after the first lock is over.
+/// very fast, lock-free, concurrent reads after the first
+/// lock is over.
 pub struct OnceMutex<T> {
     lock: Mutex<()>,
     state: AtomicUint,

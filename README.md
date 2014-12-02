@@ -1,6 +1,6 @@
 # OnceMutex
 
-> A mutex providing one-time synchronized access, then safe unsynchronized access.
+> A mutex providing one-time synchronized access, then safe lock-free access.
 
 ## Usage
 
