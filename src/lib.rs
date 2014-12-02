@@ -1,8 +1,27 @@
 #![license = "MIT"]
 #![deny(missing_docs, warnings)]
-#![feature(unsafe_destructor)]
+#![feature(unsafe_destructor, globs, phase)]
 
-//! Crate comment goes here
+//! A mutex which can only be locked once, but which provides
+//! very fast concurrent reads after the first lock is over.
+//!
+//! ## Example
+//!
+//! ```
+//! # use oncemutex::OnceMutex;
+//!
+//! let mutex = OnceMutex::new(8u);
+//!
+//! // One-time lock
+//! *mutex.lock().unwrap() = 9u;
+//!
+//! // Cheap lock-free access.
+//! assert_eq!(*mutex, 9u);
+//! ```
+//!
+
+#[cfg(test)] #[phase(plugin)]
+extern crate stainless;
 
 use std::sync::{Mutex, MutexGuard};
 use std::sync::atomic::AtomicUint;
@@ -83,7 +102,7 @@ pub struct OnceMutexGuard<'a, T: 'a> {
     _lock: MutexGuard<'a, ()>
 }
 
-impl<'a, T: Send + Sync> OnceMutexGuard<'a, T> {
+impl<'a, T> OnceMutexGuard<'a, T> {
     fn new(mutex: &'a OnceMutex<T>) -> OnceMutexGuard<'a, T> {
         OnceMutexGuard {
             parent: mutex,
@@ -105,9 +124,46 @@ impl<'a, T: Send + Sync> Deref<T> for OnceMutexGuard<'a, T> {
 }
 
 #[unsafe_destructor]
-impl<'a, T: Send + Sync> Drop for OnceMutexGuard<'a, T> {
+impl<'a, T> Drop for OnceMutexGuard<'a, T> {
     fn drop(&mut self) {
         self.parent.state.store(FREE, SeqCst);
+    }
+}
+
+#[cfg(test)]
+mod test {
+    pub use super::{OnceMutex, FREE, UNUSED, LOCKED};
+    pub use std::sync::atomic::Ordering::{Relaxed, SeqCst};
+
+    describe! oncemutex {
+        before_each {
+            let mutex = OnceMutex::new("hello");
+        }
+
+        it "should lock once and only once" {
+            assert!(mutex.lock().is_some());
+            assert!(mutex.lock().is_none());
+            assert!(mutex.lock().is_none());
+        }
+
+        it "should start with a state of UNUSED" {
+            assert_eq!(mutex.state.load(Relaxed), UNUSED);
+        }
+
+        it "should set the state to LOCKED while locked" {
+            let _lock = mutex.lock();
+            assert_eq!(mutex.state.load(Relaxed), LOCKED);
+        }
+
+        it "should set the state to FREE when the lock drops" {
+            drop(mutex.lock());
+            assert_eq!(mutex.state.load(Relaxed), FREE);
+        }
+
+        it "should set the state to FREE when derefed" {
+            *mutex;
+            assert_eq!(mutex.state.load(Relaxed), FREE);
+        }
     }
 }
 

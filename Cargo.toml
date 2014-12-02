@@ -8,3 +8,6 @@ description = "A mutex providing one-time synchronized access, then safe unsynch
 readme = "README.md"
 license = "MIT"
 
+[dev-dependencies]
+stainless = "*"
+
