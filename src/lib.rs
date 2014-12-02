@@ -72,6 +72,14 @@ impl<T: Send + Sync> OnceMutex<T> {
         }
     }
 
+    /// Block the current task until the first lock is over.
+    ///
+    /// Does nothing if there is no lock.
+    pub fn wait(&self) {
+        // Don't take out a lock if we aren't locked.
+        if self.locked() { self.lock.lock() }
+    }
+
     /// Extract the data from a OnceMutex.
     pub fn into_inner(self) -> T {
         self.data.value
@@ -90,10 +98,8 @@ impl<T: Send + Sync> Deref<T> for OnceMutex<T> {
     /// very fast otherwise.
     fn deref(&self) -> &T {
         if LOCKED == self.state.compare_and_swap(UNUSED, FREE, SeqCst) {
-            // self.lock is locked and the OnceMutexGuard has not released yet.
-            //
-            // Get a lock on self.lock, so we block until the OnceMutexGuard is gone.
-            self.lock.lock();
+            // The OnceMutexGuard has not released yet.
+            self.wait();
         }
 
         debug_assert_eq!(self.state.load(SeqCst), FREE);
