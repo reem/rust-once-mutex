@@ -38,7 +38,8 @@ impl<T: Send + Sync> OnceMutex<T> {
     /// has already been locked or is currently locked by another thread.
     pub fn lock(&self) -> Option<OnceMutexGuard<T>> {
         match self.state.compare_and_swap(UNUSED, LOCKED, SeqCst) {
-            LOCKED => {
+            // self.state is now LOCKED.
+            UNUSED => {
                 // Locks self.lock
                 Some(OnceMutexGuard::new(self))
             },
