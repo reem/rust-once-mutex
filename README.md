@@ -9,7 +9,7 @@ with the rest of your dependencies:
 
 ```toml
 [dependencies]
-once-mutex = "^0.0.0"
+once-mutex = "*"
 ```
 
 ## Author
