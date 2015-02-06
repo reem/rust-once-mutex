@@ -1,5 +1,6 @@
 #![deny(missing_docs, warnings)]
 #![feature(unsafe_destructor, plugin)]
+#![cfg_attr(test, feature(test))]
 
 //! A mutex which can only be locked once, but which provides
 //! very fast concurrent reads after the first lock is over.
@@ -195,7 +196,7 @@ mod tests {
         }
 
         bench "locking" (bencher) {
-            let mutex = OnceMutex::new(5u);
+            let mutex = OnceMutex::new(5);
             bencher.iter(|| {
                 ::test::black_box(mutex.lock());
                 mutex.state.store(UNUSED, Relaxed);
@@ -203,14 +204,14 @@ mod tests {
         }
 
         bench "access" (bencher) {
-            let mutex = OnceMutex::new(5u);
+            let mutex = OnceMutex::new(5);
             bencher.iter(|| ::test::black_box(*mutex));
         }
     }
 
     describe! mutex {
         bench "locking" (bencher) {
-            let mutex = Mutex::new(5u);
+            let mutex = Mutex::new(5);
             bencher.iter(|| ::test::black_box(mutex.lock()));
         }
     }
