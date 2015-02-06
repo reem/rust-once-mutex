@@ -1,5 +1,5 @@
 #![deny(missing_docs, warnings)]
-#![feature(unsafe_destructor, globs, phase)]
+#![feature(unsafe_destructor, plugin)]
 
 //! A mutex which can only be locked once, but which provides
 //! very fast concurrent reads after the first lock is over.
@@ -19,27 +19,28 @@
 //! ```
 //!
 
-#[cfg(test)] #[phase(plugin)]
+#[cfg(test)] #[plugin]
 extern crate stainless;
 #[cfg(test)]
 extern crate test;
 
 use std::sync::{Mutex, MutexGuard};
-use std::sync::atomic::AtomicUint;
+use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering::SeqCst;
 use std::cell::UnsafeCell;
+use std::ops::{Deref, DerefMut};
 use std::mem;
 
-const UNUSED: uint = 0;
-const LOCKED: uint = 1;
-const FREE: uint = 2;
+const UNUSED: usize = 0;
+const LOCKED: usize = 1;
+const FREE: usize = 2;
 
 /// A mutex which can only be locked once, but which provides
 /// very fast, lock-free, concurrent reads after the first
 /// lock is over.
 pub struct OnceMutex<T> {
     lock: Mutex<()>,
-    state: AtomicUint,
+    state: AtomicUsize,
     data: UnsafeCell<T>
 }
 
@@ -48,7 +49,7 @@ impl<T: Send + Sync> OnceMutex<T> {
     pub fn new(x: T) -> OnceMutex<T> {
         OnceMutex {
             lock: Mutex::new(()),
-            state: AtomicUint::new(UNUSED),
+            state: AtomicUsize::new(UNUSED),
             data: UnsafeCell::new(x)
         }
     }
@@ -90,7 +91,9 @@ impl<T: Send + Sync> OnceMutex<T> {
     }
 }
 
-impl<T: Send + Sync> Deref<T> for OnceMutex<T> {
+impl<T: Send + Sync> Deref for OnceMutex<T> {
+    type Target = T;
+
     /// Get a reference to the value inside the OnceMutex.
     ///
     /// This can block if the OnceMutex is in its lock, but is
@@ -109,7 +112,7 @@ impl<T: Send + Sync> Deref<T> for OnceMutex<T> {
 }
 
 // Safe, because we have &mut self, which means no OnceMutexGuard's exist.
-impl<T: Send + Sync> DerefMut<T> for OnceMutex<T> {
+impl<T: Send + Sync> DerefMut for OnceMutex<T> {
     fn deref_mut(&mut self) -> &mut T {
         // Should be impossible.
         debug_assert!(self.state.load(SeqCst) != LOCKED);
@@ -129,18 +132,20 @@ impl<'a, T> OnceMutexGuard<'a, T> {
     fn new(mutex: &'a OnceMutex<T>) -> OnceMutexGuard<'a, T> {
         OnceMutexGuard {
             parent: mutex,
-            _lock: mutex.lock.lock()
+            _lock: mutex.lock.lock().unwrap()
         }
     }
 }
 
-impl<'a, T: Send + Sync> DerefMut<T> for OnceMutexGuard<'a, T> {
+impl<'a, T: Send + Sync> DerefMut for OnceMutexGuard<'a, T> {
     fn deref_mut(&mut self) -> &mut T {
         unsafe { mem::transmute(self.parent.data.get()) }
     }
 }
 
-impl<'a, T: Send + Sync> Deref<T> for OnceMutexGuard<'a, T> {
+impl<'a, T: Send + Sync> Deref for OnceMutexGuard<'a, T> {
+    type Target = T;
+
     fn deref(&self) -> &T {
         unsafe { mem::transmute(self.parent.data.get()) }
     }
