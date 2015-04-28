@@ -1,6 +1,6 @@
 #![deny(missing_docs, warnings)]
-#![feature(unsafe_destructor, plugin)]
-#![cfg_attr(test, feature(test))]
+#![cfg_attr(test, feature(test, plugin))]
+#![cfg_attr(test, plugin(stainless))]
 
 //! A mutex which can only be locked once, but which provides
 //! very fast concurrent reads after the first lock is over.
@@ -10,18 +10,16 @@
 //! ```
 //! # use oncemutex::OnceMutex;
 //!
-//! let mutex = OnceMutex::new(8u);
+//! let mutex = OnceMutex::new(8);
 //!
 //! // One-time lock
-//! *mutex.lock().unwrap() = 9u;
+//! *mutex.lock().unwrap() = 9;
 //!
 //! // Cheap lock-free access.
-//! assert_eq!(*mutex, 9u);
+//! assert_eq!(*mutex, 9);
 //! ```
 //!
 
-#[cfg(test)] #[plugin]
-extern crate stainless;
 #[cfg(test)]
 extern crate test;
 
@@ -83,7 +81,7 @@ impl<T: Send + Sync> OnceMutex<T> {
 
     /// Extract the data from a OnceMutex.
     pub fn into_inner(self) -> T {
-        self.data.value
+        unsafe { self.data.into_inner() }
     }
 
     /// Is this OnceMutex currently locked?
@@ -152,7 +150,6 @@ impl<'a, T: Send + Sync> Deref for OnceMutexGuard<'a, T> {
     }
 }
 
-#[unsafe_destructor]
 impl<'a, T> Drop for OnceMutexGuard<'a, T> {
     fn drop(&mut self) {
         self.parent.state.store(FREE, SeqCst);
@@ -161,9 +158,13 @@ impl<'a, T> Drop for OnceMutexGuard<'a, T> {
 
 #[cfg(test)]
 mod tests {
-    pub use super::{OnceMutex, FREE, UNUSED, LOCKED};
+    pub use super::OnceMutex;
     pub use std::sync::atomic::Ordering::{Relaxed, SeqCst};
     pub use std::sync::Mutex;
+
+    pub const UNUSED: usize = 0;
+    pub const LOCKED: usize = 1;
+    pub const FREE: usize = 2;
 
     describe! oncemutex {
         before_each {
