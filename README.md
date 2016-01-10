@@ -18,5 +18,5 @@ once-mutex = "*"
 
 ## License
 
-MIT
+MIT/Apache-2.0
 
