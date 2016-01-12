@@ -1,5 +1,4 @@
 #![deny(missing_docs, warnings)]
-#![feature(unsafe_destructor, plugin)]
 #![cfg_attr(test, feature(test))]
 
 //! A mutex which can only be locked once, but which provides
@@ -10,18 +9,16 @@
 //! ```
 //! # use oncemutex::OnceMutex;
 //!
-//! let mutex = OnceMutex::new(8u);
+//! let mutex = OnceMutex::new(8);
 //!
 //! // One-time lock
-//! *mutex.lock().unwrap() = 9u;
+//! *mutex.lock().unwrap() = 9;
 //!
 //! // Cheap lock-free access.
-//! assert_eq!(*mutex, 9u);
+//! assert_eq!(*mutex, 9);
 //! ```
 //!
 
-#[cfg(test)] #[plugin]
-extern crate stainless;
 #[cfg(test)]
 extern crate test;
 
@@ -83,7 +80,7 @@ impl<T: Send + Sync> OnceMutex<T> {
 
     /// Extract the data from a OnceMutex.
     pub fn into_inner(self) -> T {
-        self.data.value
+        unsafe { self.data.into_inner() }
     }
 
     /// Is this OnceMutex currently locked?
@@ -152,7 +149,6 @@ impl<'a, T: Send + Sync> Deref for OnceMutexGuard<'a, T> {
     }
 }
 
-#[unsafe_destructor]
 impl<'a, T> Drop for OnceMutexGuard<'a, T> {
     fn drop(&mut self) {
         self.parent.state.store(FREE, SeqCst);
@@ -161,59 +157,57 @@ impl<'a, T> Drop for OnceMutexGuard<'a, T> {
 
 #[cfg(test)]
 mod tests {
-    pub use super::{OnceMutex, FREE, UNUSED, LOCKED};
-    pub use std::sync::atomic::Ordering::{Relaxed, SeqCst};
-    pub use std::sync::Mutex;
+    use super::{OnceMutex, FREE, UNUSED, LOCKED};
+    use std::sync::atomic::Ordering::SeqCst;
+    use std::sync::Mutex;
+    use {test};
 
-    describe! oncemutex {
-        before_each {
-            let mutex = OnceMutex::new("hello");
-        }
-
-        it "should lock once and only once" {
-            assert!(mutex.lock().is_some());
-            assert!(mutex.lock().is_none());
-            assert!(mutex.lock().is_none());
-        }
-
-        it "should start with a state of UNUSED" {
-            assert_eq!(mutex.state.load(Relaxed), UNUSED);
-        }
-
-        it "should set the state to LOCKED while locked" {
-            let _lock = mutex.lock();
-            assert_eq!(mutex.state.load(Relaxed), LOCKED);
-        }
-
-        it "should set the state to FREE when the lock drops" {
-            drop(mutex.lock());
-            assert_eq!(mutex.state.load(Relaxed), FREE);
-        }
-
-        it "should set the state to FREE when derefed" {
-            *mutex;
-            assert_eq!(mutex.state.load(Relaxed), FREE);
-        }
-
-        bench "locking" (bencher) {
-            let mutex = OnceMutex::new(5);
-            bencher.iter(|| {
-                ::test::black_box(mutex.lock());
-                mutex.state.store(UNUSED, Relaxed);
-            });
-        }
-
-        bench "access" (bencher) {
-            let mutex = OnceMutex::new(5);
-            bencher.iter(|| ::test::black_box(*mutex));
-        }
+    #[test]
+    fn test_once_mutex_locks_only_once() {
+        let mutex = OnceMutex::new("hello");
+        assert!(mutex.lock().is_some());
+        assert!(mutex.lock().is_none());
+        assert!(mutex.lock().is_none());
     }
 
-    describe! mutex {
-        bench "locking" (bencher) {
-            let mutex = Mutex::new(5);
-            bencher.iter(|| ::test::black_box(mutex.lock()));
-        }
+    #[test]
+    fn test_once_mutex_states() {
+        let mutex = OnceMutex::new("hello");
+        assert_eq!(mutex.state.load(SeqCst), UNUSED);
+
+        let lock = mutex.lock();
+        assert_eq!(mutex.state.load(SeqCst), LOCKED);
+
+        drop(lock);
+        assert_eq!(mutex.state.load(SeqCst), FREE);
+    }
+
+    #[test]
+    fn test_once_mutex_deref() {
+        let mutex = OnceMutex::new("hello");
+        *mutex;
+        assert_eq!(mutex.state.load(SeqCst), FREE);
+    }
+
+    #[bench]
+    fn bench_once_mutex_locking(bencher: &mut test::Bencher) {
+        let mutex = OnceMutex::new(5);
+        bencher.iter(|| {
+            ::test::black_box(mutex.lock());
+            mutex.state.store(UNUSED, SeqCst);
+        });
+    }
+
+    #[bench]
+    fn bench_once_mutex_access(bencher: &mut test::Bencher) {
+        let mutex = OnceMutex::new(5);
+        bencher.iter(|| ::test::black_box(*mutex));
+    }
+
+    #[bench]
+    fn bench_mutex_locking(bencher: &mut test::Bencher) {
+        let mutex = Mutex::new(5);
+        bencher.iter(|| ::test::black_box(mutex.lock()));
     }
 }
 
