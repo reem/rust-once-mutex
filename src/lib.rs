@@ -42,6 +42,9 @@ pub struct OnceMutex<T> {
     data: UnsafeCell<T>
 }
 
+unsafe impl<T: Send> Send for OnceMutex<T> {}
+unsafe impl<T: Sync> Sync for OnceMutex<T> {}
+
 impl<T: Send + Sync> OnceMutex<T> {
     /// Create a new OnceMutex.
     pub fn new(x: T) -> OnceMutex<T> {
@@ -153,6 +156,14 @@ impl<'a, T> Drop for OnceMutexGuard<'a, T> {
     fn drop(&mut self) {
         self.parent.state.store(FREE, SeqCst);
     }
+}
+
+fn _assert_send_sync() {
+    fn _assert_send<T: Send>() {}
+    fn _assert_sync<T: Sync>() {}
+
+    _assert_send::<OnceMutex<Vec<u8>>>();
+    _assert_sync::<OnceMutex<Vec<u8>>>();
 }
 
 #[cfg(test)]
